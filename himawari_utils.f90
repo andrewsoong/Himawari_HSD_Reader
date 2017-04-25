@@ -20,28 +20,28 @@ module himawari_utils
 				AHI_alloc_vals_data, &
 				AHI_get_file_name, &
 				AHI_file_exists
-	
+
 contains
 
 integer function AHI_get_timeslot(filename,timeslot) result(status)
 
 	character(len=*), intent(in)	::	filename
 	character(len=*), intent(out)	::	timeslot
-	
+
 	integer pos
-	
+
 	pos		=	index(trim(filename),".DAT")
 	if (pos .le. 0) then
 		status	=	HIMAWARI_FAILURE
 		return
 	endif
-	
+
 	timeslot(1:8)	=	filename(pos-32:pos-32+8)
 	timeslot(9:12)	=	filename(pos-23:pos-23+4)
 
 	status	=	HIMAWARI_SUCCESS
 	return
-	
+
 end function 		AHI_get_timeslot
 
 
@@ -49,9 +49,9 @@ integer function  AHI_get_indir(filename,indir) result(status)
 
 	character(len=*), intent(in)	::	filename
 	character(len=*), intent(out)	::	indir
-	
+
 	integer pos
-	
+
 	pos		=	index(trim(filename),"HS_H08_")
 	if (pos .le. 0) then
 		pos		=	index(trim(filename),"HS_H09_")
@@ -60,12 +60,12 @@ integer function  AHI_get_indir(filename,indir) result(status)
 		status	=	HIMAWARI_FAILURE
 		return
 	endif
-	
+
 	indir	=	filename(1:pos-1)
 
 	status	=	HIMAWARI_SUCCESS
 	return
-	
+
 end function 		AHI_get_indir
 
 integer function	AHI_free_vals(ahi_main) result(status)
@@ -80,16 +80,17 @@ integer function	AHI_free_vals(ahi_main) result(status)
 	deallocate(ahi_main%ahi_data%saa)
 	deallocate(ahi_main%ahi_data%time)
 	deallocate(ahi_main%ahi_data%indata)
-	
+
 	status	=	HIMAWARI_SUCCESS
 	return
 
 end function		AHI_free_vals
 
 
-integer function	AHI_free_vals_data(ahi_data) result(status)
+integer function	AHI_free_vals_data(ahi_data,verbose) result(status)
 
 	type(himawari_t_data), intent(inout)	::	ahi_data
+	logical, intent(in)							:: verbose
 
 	deallocate(ahi_data%lat)
 	deallocate(ahi_data%lon)
@@ -99,22 +100,23 @@ integer function	AHI_free_vals_data(ahi_data) result(status)
 	deallocate(ahi_data%saa)
 	deallocate(ahi_data%time)
 	deallocate(ahi_data%indata)
-	
+
 	status	=	HIMAWARI_SUCCESS
 	return
 
 end function		AHI_free_vals_data
 
-integer function	AHI_alloc_vals_data(ahi_data,nchans) result(status)
+integer function	AHI_alloc_vals_data(ahi_data,nchans,verbose) result(status)
 
 	type(himawari_t_data), intent(inout)	::	ahi_data
-	integer, intent(in)					::	nchans
-	integer							::	i,length
+	integer, intent(in)							::	nchans
+	integer											::	i,length
+	logical, intent(in)							:: verbose
 
-	
-#ifdef VERBOSE
-	write(*,*)"Number of bands to read:",nchans
-#endif
+
+	if (verbose) then
+		write(*,*)"Number of bands to read:",nchans
+	endif
 
 	allocate(ahi_data%lat(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
 	allocate(ahi_data%lon(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
@@ -123,35 +125,36 @@ integer function	AHI_alloc_vals_data(ahi_data,nchans) result(status)
 	allocate(ahi_data%sza(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
 	allocate(ahi_data%saa(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
 	allocate(ahi_data%time(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
-	
+
 	allocate(ahi_data%indata(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS,nchans))
-	
+
 	status	=	HIMAWARI_SUCCESS
 	return
 
 end function		AHI_alloc_vals_data
 
-integer function	AHI_alloc_vals(ahi_main) result(status)
+integer function	AHI_alloc_vals(ahi_main,verbose) result(status)
 
 	type(himawari_t_struct), intent(inout)	::	ahi_main
-	integer							::	i,length
-	
+	integer											::	i,length
+	logical, intent(in)							:: verbose
+
 !	ahi_main%ahi_data%n_bands	=	0
 !	do i=1,16
-!		if (ahi_main%inchans(i) .eq. 1) then 
+!		if (ahi_main%inchans(i) .eq. 1) then
 !			ahi_main%ahi_data%n_bands = ahi_main%ahi_data%n_bands+1
 !		endif
 !	end do
-	
+
 	if (ahi_main%ahi_data%n_bands <= 0) then
 		write(*,*)"No bands are selected!"
 		status	=	HIMAWARI_FAILURE
 		return
 	endif
-	
-#ifdef VERBOSE
-	write(*,*)"Number of bands to read:",ahi_main%ahi_data%n_bands
-#endif
+
+	if (verbose) then
+		write(*,*)"Number of bands to read:",ahi_main%ahi_data%n_bands
+	endif
 
 	allocate(ahi_main%ahi_data%lat(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
 	allocate(ahi_main%ahi_data%lon(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
@@ -160,22 +163,23 @@ integer function	AHI_alloc_vals(ahi_main) result(status)
 	allocate(ahi_main%ahi_data%sza(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
 	allocate(ahi_main%ahi_data%saa(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
 	allocate(ahi_main%ahi_data%time(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
-	
+
 	allocate(ahi_main%ahi_data%indata(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS,ahi_main%ahi_data%n_bands))
-	
+
 	status	=	HIMAWARI_SUCCESS
 	return
 
 end function		AHI_alloc_vals
 
-integer function	AHI_get_file_name(cnum, timeslot, satname, indir, outfile) result(status)
+integer function	AHI_get_file_name(cnum, timeslot, satname, indir, outfile,verbose) result(status)
 
 	integer, intent(in)			::	cnum
 	character(len=*), intent(in)	::	timeslot
 	character(len=*), intent(in)	::	satname
 	character(len=*), intent(in)	::	indir
 	character(len=*), intent(out)	::	outfile
-	
+	logical, intent(in)				:: verbose
+
 	outfile=indir
 	outfile	=	trim(outfile)//trim(satname)
 	outfile	=	trim(outfile)//trim("_ahi_le1b_")
@@ -219,7 +223,7 @@ integer function	AHI_get_file_name(cnum, timeslot, satname, indir, outfile) resu
 	outfile	=	trim(outfile)//trim("_org_f_")
 	outfile	=	trim(outfile)//trim(timeslot)
 	outfile	=	trim(outfile)//trim(".bin")
-	
+
 	status	=	HIMAWARI_SUCCESS
 	return
 
@@ -227,24 +231,25 @@ end function	 AHI_get_file_name
 
 
 
-integer function	AHI_get_file_name_seg(cnum, seg, timeslot, satname, indir, outfile) result(status)
+integer function	AHI_get_file_name_seg(cnum, seg, timeslot, satname, indir, outfile,verbose) result(status)
 
-	integer, intent(in)			::	cnum
-	integer, intent(in)			::	seg
+	integer, intent(in)				::	cnum
+	integer, intent(in)				::	seg
 	character(len=*), intent(in)	::	timeslot
 	character(len=*), intent(in)	::	satname
 	character(len=*), intent(in)	::	indir
-	
+
 	character(len=*), intent(out)	::	outfile
-	character(len=3)			::	tstr
-	
+	logical, intent(in)				:: verbose
+	character(len=3)					::	tstr
+
 	outfile=indir
 	outfile	=	trim(outfile)//trim("HS_H08_")
 	outfile	=	trim(outfile)//trim(timeslot(1:8))
 	outfile	=	trim(outfile)//trim("_")
 	outfile	=	trim(outfile)//trim(timeslot(9:12))
 	outfile	=	trim(outfile)//trim("_")
-	
+
 	select case(cnum)
 		case(1)
 			outfile	=	trim(outfile)//trim("B01")
@@ -287,24 +292,25 @@ integer function	AHI_get_file_name_seg(cnum, seg, timeslot, satname, indir, outf
 		outfile	=	trim(outfile)//trim("10_S")
 	else if (cnum.eq.3) then
 		outfile	=	trim(outfile)//trim("05_S")
-	else 
+	else
 		outfile	=	trim(outfile)//trim("20_S")
 	endif
 	write(tstr,"(I2.2)")seg
 	outfile	=	trim(outfile)//trim(tstr)
 	outfile	=	trim(outfile)//trim("10.DAT")
-	
+
 	status	=	HIMAWARI_SUCCESS
 	return
 
 end function	 AHI_get_file_name_seg
 
-integer function	AHI_file_exists(filename) result(status)
+integer function	AHI_file_exists(filename,verbose) result(status)
 
 	character(len=*), intent(in)	::	filename
-	logical exists 
+	logical, intent(in)				:: verbose
+	logical exists
 
-	inquire(file=filename, exist=exists) 
+	inquire(file=filename, exist=exists)
 	if (exists .eqv. .true.) then
   		status	=	HIMAWARI_SUCCESS;
 	else

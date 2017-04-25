@@ -12,16 +12,16 @@ module himawari_navigation
 	use himawari
 	use iso_c_binding
 	use himawari_headerinfo
-	
+
 	implicit none
 
 	public	::	AHI_Pix2Geo, \
 			AHI_DefaultNav, \
 			AHI_Calctime, \
 			AHI_Solpos
-				
+
 	interface
-	
+
 		integer(c_int) function get_sza_saa(year,month,day,hour,minute,lat,lon,sza,saa) bind(C, name = 'get_sza_saa')
 
 			use iso_c_binding
@@ -37,9 +37,9 @@ module himawari_navigation
 			real(c_float),	intent(in), value	:: lon
 			real(c_float),	intent(out)		:: sza
 			real(c_float),	intent(out)		:: saa
-            
+
 		end function get_sza_saa
-	end interface	
+	end interface
 contains
 
 integer function AHI_Solpos(year,month,day,hour,minute,lat,lon,sza,saa) result(status)
@@ -67,23 +67,24 @@ integer function AHI_Solpos(year,month,day,hour,minute,lat,lon,sza,saa) result(s
 	if (saa .lt. 0.0) then
 		saa	=	him_sreal_fill_value
 	endif
-	
+	sza	=	abs(sza)
 	if (sza .gt. 180.0) then
 		sza	=	him_sreal_fill_value
 	endif
 	if (sza .lt. -180.0) then
 		sza	=	him_sreal_fill_value
 	endif
-	
+
 	status	=	HIMAWARI_SUCCESS
 	return
 
 end function AHI_Solpos
 
-integer function AHI_DefaultNav(ahi_navi,him_nav) result(status)
+integer function AHI_DefaultNav(ahi_navi,him_nav,verbose) result(status)
 
 	type(himawari_t_navdata), intent(inout)	::	ahi_navi
-	type(himawari_t_Proj_Info), intent(in)	::	him_nav
+	type(himawari_t_Proj_Info), intent(in)	 	::	him_nav
+	logical, intent(in)								:: verbose
 
 	ahi_navi%subLon		=	him_nav%subLon
 	ahi_navi%cfac			=	him_nav%cfac	/	HIMAWARI_DEGTORAD
@@ -91,38 +92,34 @@ integer function AHI_DefaultNav(ahi_navi,him_nav) result(status)
 	ahi_navi%coff			=	him_nav%coff
 	ahi_navi%loff			=	him_nav%loff
 	ahi_navi%satDis		=	him_nav%satDis
-	ahi_navi%eqtrRadius		=	him_nav%eqtrRadius
-	ahi_navi%polrRadius		=	him_nav%polrRadius
-	ahi_navi%projParam1		=	him_nav%projParam1
-	ahi_navi%projParam2		=	him_nav%projParam2
-	ahi_navi%projParam3		=	him_nav%projParam3
+	ahi_navi%eqtrRadius	=	him_nav%eqtrRadius
+	ahi_navi%polrRadius	=	him_nav%polrRadius
+	ahi_navi%projParam1	=	him_nav%projParam1
+	ahi_navi%projParam2	=	him_nav%projParam2
+	ahi_navi%projParam3	=	him_nav%projParam3
 	ahi_navi%projParamSd	=	him_nav%projParamSd
 
 	status	=	HIMAWARI_SUCCESS
 	return
-	
+
 end function AHI_DefaultNav
 
-integer function AHI_Pix2Geo(ahi_main) result(status)
+integer function AHI_Pix2Geo(ahi_main,verbose) result(status)
 
 	type(himawari_t_struct), intent(inout)	::	ahi_main
+	logical, intent(in)							:: verbose
 
 !	real		::	Sd,Sn,S1,S2,S3,Sxy
-	real(kind=ahi_dreal)		::	c1,l1
+	integer	::	c1,l1
 	integer	::	xsize
 	integer	::	ysize
-	
+
 	real(kind=ahi_dreal),dimension(:,:),allocatable	::	c,l,x,y
 	real(kind=ahi_dreal),dimension(:,:),allocatable	::	Sd,Sn,S1,S2,S3,Sxy
-	
-	integer	ix,iy
-	
-	ix	=	2750
-	iy	=	5456
-	
+
 	xsize	=	HIMAWARI_IR_NLINES
 	ysize	=	HIMAWARI_IR_NCOLS
-	
+
 	allocate(c(xsize,ysize))
 	allocate(l(xsize,ysize))
 	allocate(x(xsize,ysize))
@@ -133,19 +130,20 @@ integer function AHI_Pix2Geo(ahi_main) result(status)
 	allocate(s2(xsize,ysize))
 	allocate(s3(xsize,ysize))
 	allocate(sxy(xsize,ysize))
-	
+
 	ahi_main%ahi_data%lat	=	him_sreal_fill_value
 	ahi_main%ahi_data%lon	=	him_sreal_fill_value
-	
+
 	do c1=1,HIMAWARI_IR_NLINES
 		do l1=1,HIMAWARI_IR_NCOLS
 			c(c1,l1)=dble(c1)
 			l(c1,l1)=dble(l1)
 		enddo
 	enddo
-		
-	x	=	( c - ahi_main%ahi_navdata%coff) / ( HIMAWARI_SCLUNIT * ahi_main%ahi_navdata%cfac) 
+
+	x	=	( c - ahi_main%ahi_navdata%coff) / ( HIMAWARI_SCLUNIT * ahi_main%ahi_navdata%cfac)
 	y	=	( l - ahi_main%ahi_navdata%loff) / ( HIMAWARI_SCLUNIT * ahi_main%ahi_navdata%lfac)
+
 	sd	=	(ahi_main%ahi_navdata%satDis * cos(x) * cos(y)) * (ahi_main%ahi_navdata%satDis * cos(x) * cos(y)) -&
 			 (cos(y) * cos(y) + ahi_main%ahi_navdata%projParam3 * sin(y) * sin(y)) *&
 			  ahi_main%ahi_navdata%projParamSd
@@ -157,11 +155,11 @@ integer function AHI_Pix2Geo(ahi_main) result(status)
 	s2 = sn * sin(x) * cos(y)
 	s3 =-sn * sin(y)
 	sxy=sqrt( s1 * s1 + s2 * s2)
-	
+
 	ahi_main%ahi_data%lon = sngl(HIMAWARI_RADTODEG * atan(s2/s1) + ahi_main%ahi_navdata%subLon)
-	
+
 	ahi_main%ahi_data%lat = sngl(atan(ahi_main%ahi_navdata%projParam3 * s3 / sxy) * HIMAWARI_RADTODEG)
-	
+
 	where (ahi_main%ahi_data%lon .gt. 180.0)
 		ahi_main%ahi_data%lon	=	ahi_main%ahi_data%lon-360.0
 	end where
@@ -169,31 +167,31 @@ integer function AHI_Pix2Geo(ahi_main) result(status)
 		ahi_main%ahi_data%lon	=	ahi_main%ahi_data%lon+360.0
 	end where
 !	ahi_main%ahi_data%lat	=	ahi_main%ahi_data%lat*-1
-	
-	
+
+
 !	stop
-	
-	
+
+
 	where (ahi_main%ahi_data%lon .gt. 180.0)
 		ahi_main%ahi_data%lon	=	him_sreal_fill_value
 	end where
 	where (ahi_main%ahi_data%lon .lt. -180.0)
 		ahi_main%ahi_data%lon	=	him_sreal_fill_value
 	end where
-	
+
 	where (ahi_main%ahi_data%lat .gt. 90.0)
 		ahi_main%ahi_data%lat	=	him_sreal_fill_value
 	end where
 	where (ahi_main%ahi_data%lat .lt. -90.0)
 		ahi_main%ahi_data%lat	=	him_sreal_fill_value
 	end where
-	
-	
+
+
 	deallocate(x)
 	deallocate(y)
 	deallocate(c)
 	deallocate(l)
-	
+
 	deallocate(sn)
 	deallocate(sd)
 	deallocate(s1)
@@ -203,13 +201,14 @@ integer function AHI_Pix2Geo(ahi_main) result(status)
 
 	status	=	HIMAWARI_SUCCESS
 	return
-	
-	
+
+
 end function AHI_Pix2Geo
 
-integer function AHI_Calctime(ahi_main) result(status)
+integer function AHI_Calctime(ahi_main,verbose) result(status)
 
 	type(himawari_t_struct), intent(inout)	::	ahi_main
+	logical, intent(in)							:: verbose
 
 	integer 			::	year,month,day,hour,minu,yearp,monthp,retval
 	real(kind=ahi_dreal) 	::	a,b,c,d,jd,tfact
@@ -221,19 +220,19 @@ integer function AHI_Calctime(ahi_main) result(status)
 	real(kind=ahi_dreal)	::	julian
 	real(kind=ahi_sreal)	::	sec
 	real (kind=ahi_sreal)	::	doy
-	
+
 	real(kind=ahi_sreal):: bob1,bob2
 	parameter (igreg=15+31*(10+12*1582))
-	
+
 	sec=0
 	read(ahi_main%ahi_info%timeslot(1:4),'(i10)')iye
 	read(ahi_main%ahi_info%timeslot(5:6),'(i10)')mon
 	read(ahi_main%ahi_info%timeslot(7:8),'(i10)')idy
 	read(ahi_main%ahi_info%timeslot(9:10),'(i10)')ihr
 	read(ahi_main%ahi_info%timeslot(11:12),'(i10)')min
-	
-	
-	
+
+
+
 	if(iye.eq.0.or. iye.lt.-4713) then
 		ifail=1
 		return
@@ -256,7 +255,7 @@ integer function AHI_Calctime(ahi_main) result(status)
 		ijul=ijul+2-ja+idint(0.25d0*dble(ja))
 	endif
 	julian=dble(ijul)+dble(ihr)/24.d0+dble(min)/1440.d0+dble(sec)/86400.d0-0.5d0
-	
+
 	tfact	=	10.0/(24.0*60.0)
 
 
@@ -274,38 +273,39 @@ integer function AHI_Calctime(ahi_main) result(status)
 
 end function AHI_Calctime
 
-integer function AHI_calc_satangs(ahi_main) result(status)
-                    
+integer function AHI_calc_satangs(ahi_main,verbose) result(status)
+
 	type(himawari_t_struct), intent(inout)	::	ahi_main
-	
-	
+	logical, intent(in)							:: verbose
+
+
 	real(kind=ahi_dreal),dimension(:,:),allocatable	::	N
 	real(kind=ahi_dreal),dimension(:,:),allocatable	::	x,y,z
 	real(kind=ahi_dreal),dimension(:,:),allocatable	::	cos_lat,sin_lat,cos_lon,sin_lon
 	real(kind=ahi_dreal),dimension(:,:),allocatable	::	qv1,qv2,qv3
 	real(kind=ahi_dreal),dimension(:,:),allocatable	::	u1,u2,u3
-	
+
 	real(kind=ahi_dreal)		::	e2,a,b
-	
+
 	allocate(N(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
-	
+
 	allocate(x(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
 	allocate(y(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
 	allocate(z(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
-	
+
 	allocate(qv1(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
 	allocate(qv2(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
 	allocate(qv3(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
-	
+
 	allocate(u1(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
 	allocate(u2(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
 	allocate(u3(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
-	
+
 	allocate(cos_lat(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
 	allocate(sin_lat(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
 	allocate(cos_lon(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
 	allocate(sin_lon(HIMAWARI_IR_NLINES,HIMAWARI_IR_NCOLS))
-	
+
 	a	=	ahi_main%ahi_navdata%eqtrRadius
 	b	=	ahi_main%ahi_navdata%polrRadius
 
@@ -314,11 +314,11 @@ integer function AHI_calc_satangs(ahi_main) result(status)
      sin_lat = sin(ahi_main%ahi_data%lat * HIMAWARI_DEGTORAD)
      cos_lon = cos(ahi_main%ahi_data%lon * HIMAWARI_DEGTORAD)
      sin_lon = sin(ahi_main%ahi_data%lon * HIMAWARI_DEGTORAD)
-     
+
      e2	=	1. - (b * b) / (a * a)
 
      N	=	a / sqrt(1. - e2 * sin_lat * sin_lat)
-     
+
      x	=	N * cos_lat * cos_lon;
      y	=	N * cos_lat * sin_lon;
      z	=	((b * b) / (a * a) * N) * sin_lat;
@@ -338,11 +338,11 @@ integer function AHI_calc_satangs(ahi_main) result(status)
 	ahi_main%ahi_data%vza = acos(u3 / sqrt(u1*u1 + u2*u2 + u3*u3)) * HIMAWARI_RADTODEG
 
 	ahi_main%ahi_data%vaa = atan2(-u2, u1) * HIMAWARI_RADTODEG
-	
+
 	where (ahi_main%ahi_data%vaa .lt. 0)
 		ahi_main%ahi_data%vaa	=	ahi_main%ahi_data%vaa+360.0
 	end where
-	
+
 	where (ahi_main%ahi_data%vaa .gt. 360)
 		ahi_main%ahi_data%vaa	=	him_sreal_fill_value
 	end where
@@ -352,32 +352,32 @@ integer function AHI_calc_satangs(ahi_main) result(status)
 	where (ahi_main%ahi_data%vza .lt. 0)
 		ahi_main%ahi_data%vza	=	him_sreal_fill_value
 	end where
-	where (ahi_main%ahi_data%vza .gt. 90)
+	where (ahi_main%ahi_data%vza .gt. 180)
 		ahi_main%ahi_data%vza	=	him_sreal_fill_value
 	end where
 
 	deallocate(N)
-	
+
 	deallocate(x)
 	deallocate(y)
 	deallocate(z)
-	
+
 	deallocate(qv1)
 	deallocate(qv2)
 	deallocate(qv3)
-	
+
 	deallocate(u1)
 	deallocate(u2)
 	deallocate(u3)
-	
+
 	deallocate(cos_lat)
 	deallocate(sin_lat)
 	deallocate(cos_lon)
 	deallocate(sin_lon)
-	
+
 	status	=	HIMAWARI_SUCCESS
      return
-     
+
 end function AHI_calc_satangs
 
 

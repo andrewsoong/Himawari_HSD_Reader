@@ -207,6 +207,8 @@ end function AHI_Pix2Geo
 
 integer function AHI_Calctime(ahi_main,verbose) result(status)
 
+	use omp_lib
+
 	type(himawari_t_struct), intent(inout)	::	ahi_main
 	logical, intent(in)							:: verbose
 
@@ -216,8 +218,9 @@ integer function AHI_Calctime(ahi_main,verbose) result(status)
 	real(kind=ahi_dreal)	::	start_jd,end_jd
 	integer 			::	iye,mon,idy,ihr,min,ifail
 	integer 			::	iyyy,jy,jm,igreg,ja,ijul
-	integer			::	idint2
+	integer			::	idint2,n_threads,tnr,i,t
 	real(kind=ahi_dreal)	::	julian
+	real(kind=ahi_sreal)	::	sza,saa
 	real(kind=ahi_sreal)	::	sec
 	real (kind=ahi_sreal)	::	doy
 
@@ -230,8 +233,6 @@ integer function AHI_Calctime(ahi_main,verbose) result(status)
 	read(ahi_main%ahi_info%timeslot(7:8),'(i10)')idy
 	read(ahi_main%ahi_info%timeslot(9:10),'(i10)')ihr
 	read(ahi_main%ahi_info%timeslot(11:12),'(i10)')min
-
-
 
 	if(iye.eq.0.or. iye.lt.-4713) then
 		ifail=1
@@ -261,11 +262,21 @@ integer function AHI_Calctime(ahi_main,verbose) result(status)
 
 	do x=1,HIMAWARI_IR_NLINES
 			ahi_main%ahi_data%time(:,x)=julian+tfact*(x/dble(HIMAWARI_IR_NLINES))
-			do y=1,HIMAWARI_IR_NCOLS
-				retval	=	AHI_Solpos(iye,mon,idy,ihr,min,ahi_main%ahi_data%lat(x,y),ahi_main%ahi_data%lon(x,y),ahi_main%ahi_data%sza(x,y),ahi_main%ahi_data%saa(x,y))
-!				write(*,*)x,y,ahi_main%ahi_data%lat(x,y),ahi_main%ahi_data%lon(x,y),ahi_main%ahi_data%sza(x,y),ahi_main%ahi_data%saa(x,y)
-			enddo
 	enddo
+
+#ifdef _OPENMP
+!$omp parallel DO PRIVATE(i,x,y,sza,saa,tnr)
+#endif
+	do y=1,HIMAWARI_IR_NCOLS
+		do x=1,HIMAWARI_IR_NLINES
+			retval	=	AHI_Solpos(iye,mon,idy,ihr,min,ahi_main%ahi_data%lat(x,y),ahi_main%ahi_data%lon(x,y),sza,saa)
+			ahi_main%ahi_data%sza(x,y)=sza
+			ahi_main%ahi_data%saa(x,y)=saa
+		enddo
+	enddo
+#ifdef _OPENMP
+!$omp end parallel do
+#endif
 
 	status	=	HIMAWARI_SUCCESS
 	return

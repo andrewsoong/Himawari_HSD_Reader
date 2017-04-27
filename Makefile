@@ -31,8 +31,8 @@ F90=gfortran
 #CC=icc
 #F90=ifort
 
-CFLAGS=-g -O2 -ffree-line-length-0 -cpp -fopenmp -I. #-DVERBOSE
-F90FLAGS=-g -O2 -I. -ffree-line-length-0 -fopenmp -cpp # -DVERBOSE
+CFLAGS=-g -O3 -ffree-line-length-0 -cpp -I. -fopenmp  #-DVERBOSE
+F90FLAGS=-g -O3 -I. -ffree-line-length-0 -cpp -fopenmp  # -DVERBOSE
 
 #CFLAGS=-g -O2 -fpp -align rec1byte -warn noalign  -I.#-DVERBOSE
 #F90FLAGS=-g -O2 -I. -align rec1byte -warn noalign  -fpp #-DVERBOSE

@@ -29,14 +29,16 @@ module himawari_readwrite
 contains
 
 
-integer function AHI_Main_Read(filename,ahi_data2,n_bands,band_ids,do_not_alloc,do_geo,verbose) result(status)
+integer function AHI_Main_Read(filename,geofile,ahi_data2,n_bands,band_ids,do_not_alloc,do_geo,predef_geo,verbose) result(status)
 
 	character(len=*), intent(in)			::	filename
+	character(len=*), intent(in)			::	geofile
 	type(himawari_t_data), intent(inout)::	ahi_data2
 	integer,intent(in)						::	n_bands
 	integer,intent(in),dimension(16)		::	band_ids
 	integer,intent(in)						::	do_not_alloc
 	integer,intent(in)						::	do_geo
+	logical,intent(in)						:: predef_geo
 	logical,intent(in)						:: verbose
 
 	character(len=HIMAWARI_CHARLEN)		::	satname
@@ -68,10 +70,10 @@ integer function AHI_Main_Read(filename,ahi_data2,n_bands,band_ids,do_not_alloc,
 	ahi_main%convert=HIMAWARI_UNIT_RBT
 
 	if (verbose) then
-		write(*,*)"	-	Will process bands:		"
-		do i=1,HIMAWARI_NCHANS+1
-			if (ahi_main%inchans(i).eq.1)write(*,*)i,"	"
-		enddo
+		write(*,*)"	-	Will process bands: ",ahi_main%inchans
+!		do i=1,HIMAWARI_NCHANS+1
+!			if (ahi_main%inchans(i).eq.1)write(*,*)i,"	"
+!		enddo
 	endif
 
 	if (ahi_main%ahi_data%memory_alloc_d.ne.1) then
@@ -89,15 +91,25 @@ integer function AHI_Main_Read(filename,ahi_data2,n_bands,band_ids,do_not_alloc,
 		return
 	endif
 	if (do_geo.eq.1) then
-		retval	=	AHI_Pix2Geo(ahi_main,verbose)
-		if (retval.ne.HIMAWARI_SUCCESS) then
-			status	=	HIMAWARI_FAILURE
-			return
-		endif
-		retval	=	AHI_calc_satangs(ahi_main,verbose)
-		if (retval.ne.HIMAWARI_SUCCESS) then
-			status	=	HIMAWARI_FAILURE
-			return
+		if (.not. predef_geo) then
+			if(verbose)print*,"Computing lat/lon and satellite angles"
+			retval	=	AHI_Pix2Geo(ahi_main,verbose)
+			if (retval.ne.HIMAWARI_SUCCESS) then
+				status	=	HIMAWARI_FAILURE
+				return
+			endif
+			retval	=	AHI_calc_satangs(ahi_main,verbose)
+			if (retval.ne.HIMAWARI_SUCCESS) then
+				status	=	HIMAWARI_FAILURE
+				return
+			endif
+		else
+			if(verbose)print*,"Retrieving lat/lon and satellite angles from file"
+			retval	=	AHI_Retrieve_Predef_Geo(ahi_main,geofile,verbose)
+			if (retval.ne.HIMAWARI_SUCCESS) then
+				status	=	HIMAWARI_FAILURE
+				return
+			endif
 		endif
 		retval	=	AHI_Calctime(ahi_main,verbose)
 		if (retval.ne.HIMAWARI_SUCCESS) then
@@ -105,6 +117,7 @@ integer function AHI_Main_Read(filename,ahi_data2,n_bands,band_ids,do_not_alloc,
 			return
 		endif
 	endif
+
 	ahi_data2	=	ahi_main%ahi_data
 
 	if (ahi_main%ahi_data%memory_alloc_d.ne.1) then
@@ -119,6 +132,27 @@ integer function AHI_Main_Read(filename,ahi_data2,n_bands,band_ids,do_not_alloc,
 	return
 
 end function AHI_Main_Read
+
+integer function AHI_Retrieve_Predef_Geo(ahi_main,geofile,verbose) result(status)
+	use netcdf
+	implicit none
+
+	type(himawari_t_struct), intent(inout)		::	ahi_main
+	character(len=*), intent(in)			      ::	geofile
+	logical,intent(in)								:: verbose
+
+	integer :: ncid, varid
+	call AHI_NCDF_check( nf90_open(geofile, NF90_NOWRITE, ncid) )
+	call AHI_NCDF_check( nf90_inq_varid(ncid, "Lat", varid) )
+	call AHI_NCDF_check( nf90_get_var(ncid, varid, ahi_main%ahi_data%lat) )
+	call AHI_NCDF_check( nf90_inq_varid(ncid, "Lon", varid) )
+	call AHI_NCDF_check( nf90_get_var(ncid, varid, ahi_main%ahi_data%lon) )
+	call AHI_NCDF_check( nf90_inq_varid(ncid, "VZA", varid) )
+	call AHI_NCDF_check( nf90_get_var(ncid, varid, ahi_main%ahi_data%vza) )
+	call AHI_NCDF_check( nf90_inq_varid(ncid, "VAA", varid) )
+	call AHI_NCDF_check( nf90_get_var(ncid, varid, ahi_main%ahi_data%vaa) )
+
+end function AHI_Retrieve_Predef_Geo
 
 
 integer function AHI_Setup_Read_Chans(ahi_main,verbose) result(status)
@@ -209,9 +243,9 @@ integer function AHI_Setup_Read_Chans(ahi_main,verbose) result(status)
 					return
 				endif
 			enddo
-			if (verbose) then
-				write(*,*)"Image size is: ",xsize,ysize
-			endif
+!			if (verbose) then
+!				write(*,*)"Image size is: ",xsize,ysize
+!			endif
 			retval	=	AHI_resample_hres(tdata2, ahi_main%ahi_data%indata(:,:,bandpos),xsize,ysize,verbose)
 			if (retval.ne.HIMAWARI_SUCCESS) then
 				write(*,*)"Cannot resample data for channel: ",i
@@ -337,16 +371,16 @@ integer function AHI_readchan(fname, indata,band,convert,ahi_nav,seg,sline,verbo
 	ahi_nav%cfac				=	ahi_nav%cfac/HIMAWARI_DEGTORAD
 	ahi_nav%lfac				=	ahi_nav%lfac/HIMAWARI_DEGTORAD
 
-	if (verbose) then
-		write(*,*)"Filename is:",trim(fname)
-		write(*,*)"Imsize is:",arrxs,arrys
-	endif
+!	if (verbose) then
+!		write(*,*)"Filename is:",trim(fname)
+!		write(*,*)"Imsize is:",arrxs,arrys
+!	endif
 	if (seg.ne.0) then
 		INQUIRE(FILE=fname, SIZE=flen)
 		flen	=	flen-(arrxs*arrys*2)
-		if (verbose) then
-			write(*,*)"Offset is:",flen
-		endif
+!		if (verbose) then
+!			write(*,*)"Offset is:",flen
+!		endif
 		call	fseek(filelun,flen,0,retval)
 	endif
 	read(filelun)tdata(:,:)
@@ -420,18 +454,40 @@ integer function AHI_resample_hres(indata, outdata,xsize,ysize,verbose) result(s
 	sizerx	=	xsize / HIMAWARI_IR_NLINES
 	sizery	=	ysize / HIMAWARI_IR_NCOLS
 
-	if (verbose) then
 #ifdef _OPENMP
+	if (verbose) then
 		n_threads	=	omp_get_max_threads()
 		write(*,*) 'Resampling VIS grid to IR grid using',n_threads,'threads'
-!	$OMP PARALLEL &
-!	$OMP PRIVATE(x,y,outx,outy,val,inpix) &
-!	$OMP FIRSTPRIVATE(sizerx,sizery)
-!	$OMP DO SCHEDULE(GUIDED)
-#else
-		write(*,*) 'Resampling VIS grid to IR grid using without threading'
-#endif
 	endif
+!$omp parallel DO PRIVATE(x,y,outx,outy,val,inpix)
+#else
+	if (verbose)write(*,*) 'Resampling VIS grid to IR grid using without threading'
+#endif
+!	do y=1,ysize-sizery
+!		outy	=	int(y/sizery)+1
+!		do x=1,xsize-sizerx
+!			outy	=	int(x/sizerx)+1
+!			val	=	0
+!			inpix=	0
+!			do j=1,sizery
+!				do i=1,sizerx
+!					if (indata(x+i,y+j).gt.-100) then
+!						val	=	val + indata(x+i,y+j)
+!						inpix=	inpix + 1
+!					endif
+!				enddo
+!			enddo
+!			val	=	val/inpix
+!			if (outx .le. 0 .or. outx .gt. HIMAWARI_IR_NLINES .or. &
+!			    outy .le. 0 .or. outy .gt. HIMAWARI_IR_NCOLS) then
+!			    	continue
+!			endif
+!!$OMP CRITICAL
+!			if (temparr(outx,outy).le. 0) temparr(outx,outy)=val
+!!$OMP END CRITICAL
+!		enddo
+!	enddo
+!
 	do x=1,xsize-sizerx
 		outx	=	int(x/sizerx)+1
 		do y=1,ysize-sizery
@@ -451,16 +507,16 @@ integer function AHI_resample_hres(indata, outdata,xsize,ysize,verbose) result(s
 			    outy .le. 0 .or. outy .ge. HIMAWARI_IR_NCOLS) then
 			    	continue
 			endif
-			!$OMP CRITICAL
+
 			if (temparr(outx,outy).le. 0) then
 				temparr(outx,outy)=val
 			endif
-			!$OMP END CRITICAL
+
 		enddo
 	enddo
+
 #ifdef _OPENMP
-!	$OMP END DO
-!	$OMP END PARALLEL
+!$omp end parallel do
 #endif
 	outdata	=	temparr
 	status	=	HIMAWARI_SUCCESS

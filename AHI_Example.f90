@@ -82,12 +82,14 @@ program AHI_example_f90
 	endif
 
 	! Call the main reader function
-	retval	=	AHI_Main_Read(filename,ahi_data,nchans,band_ids,0,1,verbose)
+	retval	=	AHI_Main_Read(filename,"/network/aopp/apres/users/proud/ORAC_Data/GEO_FILES/AHI_ANGLES_PAC.nc",ahi_data,nchans,band_ids,0,1,.true.,verbose)
 
-	print*,"Band: ",maxval(ahi_data%indata(:,:,1)),minval(ahi_data%indata(:,:,1))
-	print*,"Lon: ",maxval(ahi_data%lon),minval(ahi_data%lon)
-	print*,"Lat: ",maxval(ahi_data%lat),minval(ahi_data%lat)
+	print*,"Band: ",ahi_data%indata(2500,2500,:)
+	print*,"Lon: ",ahi_data%lon(2500,2500)
+	print*,"Lat: ",ahi_data%lat(2500,2500)
 	print*,"Out: ",trim(outname)
+
+	stop
 
 	if (retval .ne. HIMAWARI_SUCCESS) then
 		write(*,*)"Error encountered in data reading. Quitting."
